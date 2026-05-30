@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>One Thing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#000000;
+    --bg-soft:#0c0c0c;
+    --surface:#151515;
+    --line:#333333;
+    --ink:#ffffff;
+    --ink-dim:#b6b6b6;
+    --ink-faint:#777777;
+    --accent:#f5b301;
+    --accent-dim:#43340a;
+    --warn:#ff5a3c;
+    --display:'Fraunces',Georgia,serif;
+    --body:'Hanken Grotesk',system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--body);
+    line-height:1.5;
+    overflow:hidden;
+    position:relative;
+  }
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;opacity:.035;z-index:0;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  #app{position:relative;z-index:1;height:100%;display:flex;flex-direction:column;max-width:640px;margin:0 auto}
+
+  /* views */
+  .view{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:28px 22px 16px;display:none}
+  .view.active{display:block}
+  #now.active{display:flex;flex-direction:column}
+
+  .eyebrow{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:18px;font-weight:600}
+
+  /* NOW view */
+  #now .now-card{
+    min-height:24vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;
+    padding:6px 4px 14px;
+  }
+  .now-label{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);margin-bottom:20px;font-weight:600}
+  .now-text{font-family:var(--body);font-weight:700;font-size:clamp(30px,8vw,46px);line-height:1.12;letter-spacing:-.01em;color:var(--ink);max-width:18ch}
+  .now-empty{font-family:var(--body);font-weight:500;font-size:clamp(22px,6vw,33px);line-height:1.25;color:var(--ink-dim);max-width:20ch}
+  .now-parent{font-size:14px;color:var(--ink-faint);margin-top:14px;letter-spacing:.02em}
+
+  /* timer */
+  .timer-wrap{display:flex;flex-direction:column;align-items:center;margin-top:6px}
+  .ring{position:relative;width:172px;height:172px}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .track{stroke:var(--line);fill:none;stroke-width:6}
+  .ring .prog{stroke:var(--accent);fill:none;stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset .9s linear}
+  .ring .time{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .ring .time b{font-family:var(--body);font-weight:800;font-size:42px;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+  .ring .time span{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);margin-top:2px}
+  .ring.done .prog{stroke:var(--warn)}
+  .ring.done .time b{color:var(--warn)}
+
+  .presets{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap;justify-content:center}
+  .preset{background:var(--surface);border:1px solid var(--line);color:var(--ink-dim);padding:8px 14px;border-radius:999px;font-size:13px;font-family:var(--body);cursor:pointer;font-weight:500}
+  .preset.sel{border-color:var(--accent-dim);color:var(--accent);background:var(--bg-soft)}
+  .timer-btns{display:flex;gap:10px;margin-top:16px;align-items:center;justify-content:center}
+  .tbtn{background:transparent;border:1px solid var(--line);color:var(--ink-dim);width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .tbtn svg{width:20px;height:20px;fill:currentColor}
+  .tbtn.primary{background:var(--accent);border-color:var(--accent);color:var(--bg);width:60px;height:60px}
+  .tbtn.primary svg{width:24px;height:24px}
+
+  .now-actions{display:flex;gap:10px;margin-top:26px;justify-content:center;flex-wrap:wrap}
+  .pill{background:var(--surface);border:1px solid var(--line);color:var(--ink);padding:11px 18px;border-radius:999px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--body)}
+  .pill.done-pill{background:var(--accent-dim);border-color:var(--accent-dim);color:var(--ink)}
+
+  /* park bar */
+  .park{position:relative;margin-top:auto;padding-top:22px;border-top:1px solid var(--line)}
+  .park label{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);font-weight:600;display:block;margin-bottom:10px}
+  .park-row{display:flex;gap:8px}
+  .field{flex:1;background:var(--surface);border:1px solid var(--line);color:var(--ink);padding:13px 14px;border-radius:12px;font-size:16px;font-family:var(--body);outline:none}
+  .field:focus{border-color:var(--accent-dim)}
+  .add-btn{background:var(--bg-soft);border:1px solid var(--line);color:var(--accent);padding:0 18px;border-radius:12px;font-size:22px;cursor:pointer;line-height:1}
+
+  /* TASKS view */
+  .task{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 16px 4px;margin-bottom:14px}
+  .task-head{display:flex;align-items:flex-start;gap:12px}
+  .task-title{flex:1;font-family:var(--body);font-weight:600;font-size:19px;color:var(--ink);line-height:1.25}
+  .task-title.alldone{color:var(--ink-faint);text-decoration:line-through}
+  .chev{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:13px;padding:2px 6px}
+  .del{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:18px;padding:0 4px;line-height:1}
+  .meta{font-size:12px;color:var(--ink-faint);margin:6px 0 12px}
+  .steps{display:none;padding-bottom:8px}
+  .steps.open{display:block}
+  .step{display:flex;align-items:center;gap:11px;padding:9px 0;border-top:1px solid var(--line)}
+  .box{width:21px;height:21px;border-radius:6px;border:1.5px solid var(--ink-faint);flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .box.on{background:var(--accent);border-color:var(--accent)}
+  .box svg{width:13px;height:13px;fill:var(--bg);display:none}
+  .box.on svg{display:block}
+  .step-text{flex:1;font-size:16px;color:var(--ink)}
+  .step-text.on{color:var(--ink-faint);text-decoration:line-through}
+  .focus-btn{background:none;border:1px solid var(--line);color:var(--ink-dim);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:5px 10px;border-radius:999px;cursor:pointer;font-weight:600;font-family:var(--body)}
+  .focus-btn.cur{border-color:var(--accent);color:var(--accent)}
+  .add-step{display:flex;gap:8px;padding:11px 0 4px;border-top:1px dashed var(--line)}
+  .add-step .field{padding:9px 12px;font-size:14px;border-radius:9px}
+  .add-step .add-btn{padding:0 14px;border-radius:9px;font-size:18px}
+
+  .new-task{display:flex;gap:8px;margin-bottom:22px}
+
+  /* PARKED view */
+  .parked-item{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:14px 14px;margin-bottom:11px;display:flex;align-items:flex-start;gap:10px}
+  .parked-item .txt{flex:1;font-size:16px;color:var(--ink)}
+  .parked-item .ts{font-size:11px;color:var(--ink-faint);margin-top:4px;letter-spacing:.04em}
+  .mini{background:none;border:1px solid var(--line);color:var(--ink-dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:5px 9px;border-radius:8px;cursor:pointer;font-weight:600;font-family:var(--body)}
+
+  .empty{text-align:center;color:var(--ink-faint);font-family:var(--body);font-weight:500;font-size:16px;padding:40px 20px;line-height:1.6}
+
+  /* nav */
+  nav{display:flex;border-top:1px solid var(--line);background:var(--bg-soft)}
+  nav button{flex:1;background:none;border:none;color:var(--ink-faint);padding:14px 0 calc(14px + env(safe-area-inset-bottom));font-family:var(--body);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
+  nav button svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.6}
+  nav button.on{color:var(--accent)}
+  .badge{position:absolute;top:9px;right:50%;margin-right:-26px;background:var(--accent);color:var(--bg);font-size:10px;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px;font-weight:600}
+  nav button{position:relative}
+
+  /* sync */
+  .gear{position:fixed;top:calc(12px + env(safe-area-inset-top));right:14px;z-index:5;background:var(--bg-soft);border:1px solid var(--line);color:var(--ink-dim);width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .gear svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.6}
+  .gear .dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--ink-faint)}
+  .gear .dot.ok{background:var(--accent)}
+  .gear .dot.busy{background:var(--warn)}
+  .overlay{position:fixed;inset:0;z-index:10;background:rgba(10,9,7,.78);backdrop-filter:blur(3px);display:none;align-items:flex-end;justify-content:center}
+  .overlay.open{display:flex}
+  .sheet{background:var(--bg-soft);border:1px solid var(--line);border-radius:22px 22px 0 0;width:100%;max-width:640px;padding:24px 22px calc(28px + env(safe-area-inset-bottom));max-height:88vh;overflow-y:auto}
+  .sheet h2{font-family:var(--display);font-weight:500;font-size:22px;margin-bottom:6px}
+  .sheet p{font-size:13px;color:var(--ink-dim);line-height:1.55;margin-bottom:16px}
+  .sheet p a{color:var(--accent)}
+  .sheet label{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);font-weight:600;display:block;margin:14px 0 7px}
+  .sheet .field{width:100%}
+  .sheet-btns{display:flex;gap:10px;margin-top:20px}
+  .btn{flex:1;padding:13px;border-radius:12px;font-size:14px;font-weight:600;font-family:var(--body);cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+  .btn.go{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+  .btn.danger{color:var(--warn);border-color:var(--accent-dim)}
+  .status{font-size:13px;color:var(--ink-dim);margin-top:14px;min-height:18px}
+  .status.err{color:var(--warn)}
+  .status.ok{color:var(--accent)}
+  .note{font-size:12px;color:var(--ink-faint);line-height:1.5;margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- NOW -->
+  <section id="now" class="view active">
+    <div class="now-card">
+      <div class="now-label" id="nowLabel">Right now</div>
+      <div id="nowBody"></div>
+    </div>
+
+    <div class="timer-wrap">
+      <div class="ring" id="ring">
+        <svg width="172" height="172" viewBox="0 0 172 172">
+          <circle class="track" cx="86" cy="86" r="78"></circle>
+          <circle class="prog" id="prog" cx="86" cy="86" r="78"></circle>
+        </svg>
+        <div class="time"><b id="clock">15:00</b><span id="clockState">ready</span></div>
+      </div>
+      <div class="presets" id="presets"></div>
+      <div class="timer-btns">
+        <button class="tbtn" id="resetBtn" title="Reset"><svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg></button>
+        <button class="tbtn primary" id="playBtn" title="Start"><svg viewBox="0 0 24 24" id="playIcon"><path d="M8 5v14l11-7z"/></svg></button>
+      </div>
+    </div>
+
+    <div class="now-actions" id="nowActions"></div>
+
+    <div class="park">
+      <label>Park a thought — get it out of your head</label>
+      <div class="park-row">
+        <input class="field" id="parkInput" placeholder="The thing pulling your attention…" autocomplete="off">
+        <button class="add-btn" id="parkAdd">+</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- TASKS -->
+  <section id="tasks" class="view">
+    <div class="eyebrow">Tasks &amp; breakdown</div>
+    <div class="new-task">
+      <input class="field" id="taskInput" placeholder="Add a task…" autocomplete="off">
+      <button class="add-btn" id="taskAdd">+</button>
+    </div>
+    <div id="taskList"></div>
+  </section>
+
+  <!-- PARKED -->
+  <section id="parked" class="view">
+    <div class="eyebrow">Parked thoughts</div>
+    <div id="parkedList"></div>
+  </section>
+
+  <nav>
+    <button data-v="now" class="on">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/></svg>
+      Now
+    </button>
+    <button data-v="tasks">
+      <svg viewBox="0 0 24 24"><path d="M4 7h11M4 12h11M4 17h7"/><path d="M19 6l1.5 1.5L23 5"/></svg>
+      Tasks
+    </button>
+    <button data-v="parked">
+      <svg viewBox="0 0 24 24"><path d="M4 5h16M6 5v13a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V5M9 5V3h6v2"/></svg>
+      Parked<span class="badge" id="parkBadge" style="display:none">0</span>
+    </button>
+  </nav>
+
+  <button class="gear" id="gearBtn" title="Sync settings">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.5a7.8 7.8 0 0 0 0-3l1.8-1.4-1.8-3.1-2.1.8a7.6 7.6 0 0 0-2.6-1.5L14.2 2H9.8l-.3 2.3a7.6 7.6 0 0 0-2.6 1.5l-2.1-.8L3 8.1l1.8 1.4a7.8 7.8 0 0 0 0 3L3 13.9l1.8 3.1 2.1-.8a7.6 7.6 0 0 0 2.6 1.5l.3 2.3h4.4l.3-2.3a7.6 7.6 0 0 0 2.6-1.5l2.1.8 1.8-3.1z"/></svg>
+    <span class="dot" id="syncDot"></span>
+  </button>
+
+  <div class="overlay" id="syncOverlay">
+    <div class="sheet">
+      <h2>Cloud sync</h2>
+      <p>Sync your tasks across devices through a private GitHub Gist. You need a token with <b>gist</b> scope — create one at <a href="https://github.com/settings/tokens/new?scopes=gist&description=One%20Thing%20sync" target="_blank" rel="noopener">github.com/settings/tokens</a>.</p>
+
+      <label>GitHub token</label>
+      <input class="field" id="tokenInput" type="password" placeholder="ghp_… or github_pat_…" autocomplete="off" autocapitalize="off" spellcheck="false">
+
+      <label>Gist ID <span style="text-transform:none;letter-spacing:0">(leave blank to create a new one)</span></label>
+      <input class="field" id="gistInput" placeholder="paste an existing Gist ID, or leave empty" autocomplete="off" autocapitalize="off" spellcheck="false">
+
+      <div class="status" id="syncStatus"></div>
+
+      <div class="sheet-btns">
+        <button class="btn" id="syncCancel">Close</button>
+        <button class="btn go" id="syncConnect">Connect</button>
+      </div>
+      <div class="sheet-btns" id="syncedBtns" style="display:none">
+        <button class="btn" id="syncNow">Sync now</button>
+        <button class="btn danger" id="syncDisconnect">Disconnect</button>
+      </div>
+
+      <div class="note">Your token is stored only in this browser and sent only to GitHub. On open, the cloud copy is pulled in; your latest edit wins. If you edit on two devices at once, the last save overwrites.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const KEY="onething.v1";
+const uid=()=>Math.random().toString(36).slice(2,9);
+
+let S=load();
+function load(){
+  try{const r=JSON.parse(localStorage.getItem(KEY));if(r&&r.tasks)return r;}catch(e){}
+  return {tasks:[],parked:[],focus:null,preset:15};
+}
+function persistLocal(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function save(){persistLocal();schedulePush();}
+
+/* ---------- NOW ---------- */
+function focusedStep(){
+  if(!S.focus)return null;
+  const t=S.tasks.find(t=>t.id===S.focus.taskId);if(!t)return null;
+  const st=t.steps.find(s=>s.id===S.focus.stepId);if(!st)return null;
+  return {task:t,step:st};
+}
+function renderNow(){
+  const f=focusedStep();const body=$("#nowBody");const acts=$("#nowActions");
+  if(f){
+    body.innerHTML=`<div class="now-text">${esc(f.step.text)}</div><div class="now-parent">from “${esc(f.task.title)}”</div>`;
+    acts.innerHTML=`<button class="pill done-pill" id="doneBtn">Mark done →</button><button class="pill" id="clearFocus">Clear</button>`;
+    $("#doneBtn").onclick=()=>{f.step.done=true;advance(f.task);save();renderAll();};
+    $("#clearFocus").onclick=()=>{S.focus=null;save();renderAll();};
+  }else{
+    body.innerHTML=`<div class="now-empty">Pick one step to focus on — or just start the timer for 5 minutes.</div>`;
+    acts.innerHTML="";
+  }
+}
+function advance(task){
+  const next=task.steps.find(s=>!s.done);
+  S.focus = next ? {taskId:task.id,stepId:next.id} : null;
+}
+
+/* ---------- TIMER ---------- */
+let timer={total:S.preset*60,left:S.preset*60,running:false,iv:null,ac:null};
+const C=2*Math.PI*78;
+$("#prog").style.strokeDasharray=C;
+function paintTimer(){
+  const m=Math.floor(timer.left/60),s=timer.left%60;
+  $("#clock").textContent=`${m}:${String(s).padStart(2,"0")}`;
+  const frac=timer.total?timer.left/timer.total:0;
+  $("#prog").style.strokeDashoffset=C*(1-frac);
+  $("#clockState").textContent=timer.left<=0?"time's up":(timer.running?"focusing":"ready");
+  $("#ring").classList.toggle("done",timer.left<=0);
+  $("#playIcon").innerHTML=timer.running?'<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>':'<path d="M8 5v14l11-7z"/>';
+}
+function setPreset(min){
+  S.preset=min;save();
+  timer.total=min*60;timer.left=min*60;timer.running=false;clearInterval(timer.iv);
+  $$(".preset").forEach(p=>p.classList.toggle("sel",+p.dataset.m===min));
+  paintTimer();
+}
+function tick(){
+  timer.left--;
+  if(timer.left<=0){timer.left=0;timer.running=false;clearInterval(timer.iv);chime();}
+  paintTimer();
+}
+function toggleTimer(){
+  if(timer.running){timer.running=false;clearInterval(timer.iv);paintTimer();return;}
+  if(timer.left<=0)timer.left=timer.total;
+  ensureAudio();
+  timer.running=true;timer.iv=setInterval(tick,1000);paintTimer();
+}
+function ensureAudio(){try{if(!timer.ac)timer.ac=new(window.AudioContext||window.webkitAudioContext)();if(timer.ac.state==="suspended")timer.ac.resume();}catch(e){}}
+function chime(){
+  try{const ac=timer.ac;if(!ac)return;
+    [0,.18,.36].forEach((d,i)=>{const o=ac.createOscillator(),g=ac.createGain();
+      o.frequency.value=[523,659,784][i];o.type="sine";o.connect(g);g.connect(ac.destination);
+      const t=ac.currentTime+d;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.18,t+.04);
+      g.gain.exponentialRampToValueAtTime(.001,t+.9);o.start(t);o.stop(t+.95);});
+  }catch(e){}
+}
+function buildPresets(){
+  const ps=[5,15,25,45];
+  $("#presets").innerHTML=ps.map(m=>`<button class="preset ${m===S.preset?'sel':''}" data-m="${m}">${m} min</button>`).join("");
+  $$(".preset").forEach(p=>p.onclick=()=>setPreset(+p.dataset.m));
+}
+$("#playBtn").onclick=toggleTimer;
+$("#resetBtn").onclick=()=>{timer.left=timer.total;timer.running=false;clearInterval(timer.iv);paintTimer();};
+
+/* ---------- TASKS ---------- */
+function renderTasks(){
+  const list=$("#taskList");
+  if(!S.tasks.length){list.innerHTML=`<div class="empty">Nothing here yet.<br>Add a task, then break it into small steps.</div>`;return;}
+  list.innerHTML=S.tasks.map(t=>{
+    const total=t.steps.length,done=t.steps.filter(s=>s.done).length;
+    const allDone=total>0&&done===total;
+    const open=t._open?"open":"";
+    return `<div class="task" data-t="${t.id}">
+      <div class="task-head">
+        <div class="task-title ${allDone?'alldone':''}">${esc(t.title)}</div>
+        <button class="chev" data-toggle="${t.id}">${t._open?'▾':'▸'}</button>
+        <button class="del" data-deltask="${t.id}">×</button>
+      </div>
+      <div class="meta">${total?`${done}/${total} steps`:'no steps yet'}</div>
+      <div class="steps ${open}" data-steps="${t.id}">
+        ${t.steps.map(s=>{
+          const cur=S.focus&&S.focus.stepId===s.id;
+          return `<div class="step">
+            <div class="box ${s.done?'on':''}" data-check="${t.id}|${s.id}"><svg viewBox="0 0 24 24"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg></div>
+            <div class="step-text ${s.done?'on':''}">${esc(s.text)}</div>
+            <button class="focus-btn ${cur?'cur':''}" data-focus="${t.id}|${s.id}">${cur?'in focus':'focus'}</button>
+          </div>`;}).join("")}
+        <div class="add-step">
+          <input class="field" placeholder="Add a step…" data-stepinput="${t.id}" autocomplete="off">
+          <button class="add-btn" data-stepadd="${t.id}">+</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+  bindTasks();
+}
+function bindTasks(){
+  $$("[data-toggle]").forEach(b=>b.onclick=()=>{const t=S.tasks.find(t=>t.id===b.dataset.toggle);t._open=!t._open;renderTasks();});
+  $$("[data-deltask]").forEach(b=>b.onclick=()=>{S.tasks=S.tasks.filter(t=>t.id!==b.dataset.deltask);if(S.focus&&!S.tasks.find(t=>t.id===S.focus.taskId))S.focus=null;save();renderAll();});
+  $$("[data-check]").forEach(b=>b.onclick=()=>{const[ti,si]=b.dataset.check.split("|");const t=S.tasks.find(t=>t.id===ti);const s=t.steps.find(s=>s.id===si);s.done=!s.done;save();renderAll();});
+  $$("[data-focus]").forEach(b=>b.onclick=()=>{const[ti,si]=b.dataset.focus.split("|");S.focus={taskId:ti,stepId:si};save();setView("now");renderAll();});
+  $$("[data-stepadd]").forEach(b=>b.onclick=()=>addStep(b.dataset.stepadd));
+  $$("[data-stepinput]").forEach(inp=>inp.addEventListener("keydown",e=>{if(e.key==="Enter")addStep(inp.dataset.stepinput);}));
+}
+function addStep(tid){
+  const inp=$(`[data-stepinput="${tid}"]`);const v=inp.value.trim();if(!v)return;
+  const t=S.tasks.find(t=>t.id===tid);t.steps.push({id:uid(),text:v,done:false});t._open=true;
+  save();renderTasks();const ni=$(`[data-stepinput="${tid}"]`);if(ni)ni.focus();
+}
+$("#taskAdd").onclick=addTask;
+$("#taskInput").addEventListener("keydown",e=>{if(e.key==="Enter")addTask();});
+function addTask(){
+  const v=$("#taskInput").value.trim();if(!v)return;
+  S.tasks.unshift({id:uid(),title:v,steps:[],_open:true});
+  $("#taskInput").value="";save();renderTasks();
+}
+
+/* ---------- PARK ---------- */
+$("#parkAdd").onclick=park;
+$("#parkInput").addEventListener("keydown",e=>{if(e.key==="Enter")park();});
+function park(){
+  const v=$("#parkInput").value.trim();if(!v)return;
+  S.parked.unshift({id:uid(),text:v,ts:Date.now()});
+  $("#parkInput").value="";save();renderParked();flash($("#parkInput"),"parked ✓");
+}
+function flash(el,msg){const o=el.placeholder;el.placeholder=msg;setTimeout(()=>el.placeholder=o,1100);}
+function renderParked(){
+  const n=S.parked.length;const bd=$("#parkBadge");
+  bd.style.display=n?"flex":"none";bd.textContent=n;
+  const list=$("#parkedList");
+  if(!n){list.innerHTML=`<div class="empty">Clear head.<br>Anything that distracts you, drop it here from the Now screen.</div>`;return;}
+  list.innerHTML=S.parked.map(p=>`<div class="parked-item">
+    <div><div class="txt">${esc(p.text)}</div><div class="ts">${rel(p.ts)}</div></div>
+    <button class="mini" data-totask="${p.id}">→ task</button>
+    <button class="mini" data-delpark="${p.id}">done</button>
+  </div>`).join("");
+  $$("[data-totask]").forEach(b=>b.onclick=()=>{const p=S.parked.find(p=>p.id===b.dataset.totask);S.tasks.unshift({id:uid(),title:p.text,steps:[],_open:true});S.parked=S.parked.filter(x=>x.id!==p.id);save();renderAll();setView("tasks");});
+  $$("[data-delpark]").forEach(b=>b.onclick=()=>{S.parked=S.parked.filter(x=>x.id!==b.dataset.delpark);save();renderParked();});
+}
+function rel(ts){const d=(Date.now()-ts)/1000;if(d<60)return"just now";if(d<3600)return Math.floor(d/60)+"m ago";if(d<86400)return Math.floor(d/3600)+"h ago";return Math.floor(d/86400)+"d ago";}
+
+/* ---------- shell ---------- */
+function esc(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function setView(v){
+  $$(".view").forEach(s=>s.classList.toggle("active",s.id===v));
+  $$("nav button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));
+}
+$$("nav button").forEach(b=>b.onclick=()=>setView(b.dataset.v));
+function renderAll(){renderNow();renderTasks();renderParked();}
+
+/* ---------- GIST SYNC ---------- */
+const SYNC_KEY="onething.sync";
+const FILE="onething.json";
+let cloud=loadCloud();
+let pushTimer=null,pulling=false;
+function loadCloud(){try{const c=JSON.parse(localStorage.getItem(SYNC_KEY));if(c&&c.token&&c.gistId)return c;}catch(e){}return null;}
+function saveCloud(){if(cloud)localStorage.setItem(SYNC_KEY,JSON.stringify(cloud));else localStorage.removeItem(SYNC_KEY);}
+function setDot(state){const d=$("#syncDot");d.className="dot"+(state?" "+state:"");}
+function setStatus(msg,kind){const s=$("#syncStatus");s.textContent=msg||"";s.className="status"+(kind?" "+kind:"");}
+
+async function gh(method,path,body,token){
+  const r=await fetch("https://api.github.com"+path,{
+    method,
+    headers:{"Authorization":"Bearer "+(token||cloud.token),"Accept":"application/vnd.github+json","Content-Type":"application/json"},
+    body:body?JSON.stringify(body):undefined
+  });
+  if(!r.ok){const t=await r.text().catch(()=>"");throw new Error(r.status+" "+(r.status===401?"bad token":r.status===404?"gist not found":t.slice(0,80)));}
+  return r.json();
+}
+function payload(){return JSON.stringify({tasks:S.tasks,parked:S.parked,focus:S.focus,preset:S.preset});}
+
+async function pull(){
+  if(!cloud)return;
+  pulling=true;setDot("busy");
+  try{
+    const g=await gh("GET","/gists/"+cloud.gistId);
+    const f=g.files&&g.files[FILE];
+    if(f){
+      let content=f.content;
+      if(f.truncated&&f.raw_url){const rr=await fetch(f.raw_url,{headers:{"Authorization":"Bearer "+cloud.token}});content=await rr.text();}
+      const data=JSON.parse(content);
+      if(data&&data.tasks){S.tasks=data.tasks;S.parked=data.parked||[];S.focus=data.focus||null;S.preset=data.preset||S.preset;persistLocal();renderAll();}
+    }
+    setDot("ok");setStatus("Up to date.","ok");
+  }catch(e){setDot("");setStatus("Pull failed: "+e.message,"err");}
+  pulling=false;
+}
+async function push(){
+  if(!cloud||pulling)return;
+  setDot("busy");
+  try{
+    await gh("PATCH","/gists/"+cloud.gistId,{files:{[FILE]:{content:payload()}}});
+    setDot("ok");setStatus("Synced.","ok");
+  }catch(e){setDot("");setStatus("Sync failed: "+e.message,"err");}
+}
+function schedulePush(){if(!cloud)return;clearTimeout(pushTimer);setDot("busy");pushTimer=setTimeout(push,2000);}
+
+async function connect(){
+  const token=$("#tokenInput").value.trim();
+  let gistId=$("#gistInput").value.trim();
+  if(!token){setStatus("Enter your GitHub token.","err");return;}
+  setStatus("Connecting…");setDot("busy");
+  try{
+    if(gistId){
+      cloud={token,gistId};
+      await pull();
+    }else{
+      const g=await gh("POST","/gists",{description:"One Thing — focus app data",public:false,files:{[FILE]:{content:payload()}}},token);
+      cloud={token,gistId:g.id};
+      setStatus("Created new Gist · ID "+g.id,"ok");
+    }
+    saveCloud();reflectSync();setDot("ok");
+    $("#gistInput").value=cloud.gistId;
+  }catch(e){cloud=null;setDot("");setStatus("Failed: "+e.message,"err");}
+}
+function disconnect(){cloud=null;saveCloud();setDot("");setStatus("Disconnected. Data stays on this device.");reflectSync();}
+function reflectSync(){
+  const on=!!cloud;
+  $("#syncConnect").style.display=on?"none":"";
+  $("#syncCancel").textContent=on?"Close":"Close";
+  $("#syncedBtns").style.display=on?"flex":"none";
+  if(on){$("#tokenInput").value=cloud.token;$("#gistInput").value=cloud.gistId;}
+}
+$("#gearBtn").onclick=()=>{reflectSync();if(cloud&&!$("#syncStatus").textContent)setStatus("Connected.","ok");$("#syncOverlay").classList.add("open");};
+$("#syncCancel").onclick=()=>$("#syncOverlay").classList.remove("open");
+$("#syncOverlay").onclick=e=>{if(e.target.id==="syncOverlay")$("#syncOverlay").classList.remove("open");};
+$("#syncConnect").onclick=connect;
+$("#syncNow").onclick=()=>push();
+$("#syncDisconnect").onclick=disconnect;
+
+buildPresets();paintTimer();renderAll();
+if(cloud){setDot("ok");pull();}
+</script>
+</body>
+</html>
