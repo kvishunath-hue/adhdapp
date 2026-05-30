@@ -41,7 +41,8 @@
   #app{position:relative;z-index:1;height:100vh;height:100dvh;display:flex;flex-direction:column;max-width:640px;margin:0 auto}
 
   /* views */
-  .view{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;scrollbar-gutter:stable both-edges;padding:20px 22px 14px;display:none}
+  .view{flex:1;width:100%;min-width:0;overflow-y:auto;overflow-x:hidden;overflow-wrap:anywhere;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:20px 22px 14px;display:none}
+  .view::-webkit-scrollbar{width:0;height:0}
   .view.active{display:block}
   #now.active{display:flex;flex-direction:column}
   .now-main{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;width:100%}
@@ -157,7 +158,7 @@
 
   @media (min-width:680px) and (min-height:740px){
     body{display:flex;align-items:center;justify-content:center}
-    #app{height:740px;max-height:92vh;border:1px solid var(--line);border-radius:26px;overflow:hidden}
+    #app{width:640px;height:740px;max-height:92vh;border:1px solid var(--line);border-radius:26px;overflow:hidden}
     nav{border-radius:0}
   }
 </style>
