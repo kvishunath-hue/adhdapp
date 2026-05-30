@@ -44,13 +44,14 @@
   .view{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:20px 22px 14px;display:none}
   .view.active{display:block}
   #now.active{display:flex;flex-direction:column}
+  .now-main{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;width:100%}
 
   .eyebrow{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:18px;font-weight:600}
 
   /* NOW view */
   #now .now-card{
-    min-height:14vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;
-    padding:4px 4px 10px;
+    min-height:0;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;
+    padding:4px 4px 24px;
   }
   .now-label{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);margin-bottom:14px;font-weight:600}
   .now-text{font-family:var(--body);font-weight:700;font-size:clamp(30px,8vw,46px);line-height:1.12;letter-spacing:-.01em;color:var(--ink);max-width:18ch}
@@ -83,7 +84,7 @@
   .pill.done-pill{background:var(--accent-dim);border-color:var(--accent-dim);color:var(--ink)}
 
   /* park bar */
-  .park{position:relative;margin-top:auto;padding-top:16px;border-top:1px solid var(--line)}
+  .park{position:relative;margin-top:0;padding-top:16px;border-top:1px solid var(--line)}
   .park label{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);font-weight:600;display:block;margin-bottom:10px}
   .park-row{display:flex;gap:8px}
   .field{flex:1;background:var(--surface);border:1px solid var(--line);color:var(--ink);padding:13px 14px;border-radius:12px;font-size:16px;font-family:var(--body);outline:none}
@@ -166,6 +167,7 @@
 
   <!-- NOW -->
   <section id="now" class="view active">
+    <div class="now-main">
     <div class="now-card">
       <div class="now-label" id="nowLabel">Right now</div>
       <div id="nowBody"></div>
@@ -187,6 +189,7 @@
     </div>
 
     <div class="now-actions" id="nowActions"></div>
+    </div>
 
     <div class="park">
       <label>Park a thought — get it out of your head</label>
