@@ -127,6 +127,7 @@
   .add-step .add-btn{padding:0 14px;border-radius:9px;font-size:18px}
 
   .new-task{display:flex;gap:8px;margin-bottom:22px}
+  .eyebrow-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:18px}
 
   /* PARKED view */
   .parked-item{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:14px 14px;margin-bottom:11px;display:flex;align-items:flex-start;gap:10px}
@@ -270,11 +271,12 @@
         <button class="btn danger" id="syncDisconnect">Disconnect</button>
       </div>
 
-      <div class="note">Your token is stored only in this browser and sent only to GitHub. Edits push automatically; the app pulls when you open or return to it. The app finds (or creates) your gist from the token, so there's no ID to copy. <span id="buildTag" style="color:var(--ink-faint)">Sync build 10</span></div>
+      <div class="note">Your token is stored only in this browser and sent only to GitHub. Edits push automatically; the app pulls when you open or return to it. The app finds (or creates) your gist from the token, so there's no ID to copy. <span id="buildTag" style="color:var(--ink-faint)">Sync build 11</span></div>
 
       <label>Backup</label>
-      <p style="margin-bottom:10px">Save a copy of all tasks &amp; parked items to a file, or restore from one. Useful before big changes or to carry data manually.</p>
+      <p style="margin-bottom:10px">Save everything to a file, or restore from one. <b>Export text</b> = a readable .txt list. <b>Export file</b> = a .json backup you can re-import.</p>
       <div class="sheet-btns">
+        <button class="btn" id="exportTxtBtn">Export text</button>
         <button class="btn" id="exportBtn">Export file</button>
         <button class="btn" id="importBtn">Import file</button>
       </div>
@@ -374,8 +376,16 @@ function finishTimer(){
   if(timer.iv){clearInterval(timer.iv);timer.iv=null;}
   const wasRunning=S.timer.running;
   S.timer.running=false;S.timer.left=0;
-  if(wasRunning && chimedFor!==S.timer.endAt){chimedFor=S.timer.endAt;chime();}
+  if(wasRunning && chimedFor!==S.timer.endAt){chimedFor=S.timer.endAt;chime();notifyDone();}
   persistLocal();paintTimer();
+}
+function notifyDone(){
+  try{
+    if(typeof Notification==="undefined")return;
+    if(Notification.permission==="granted"){
+      new Notification("Time's up",{body:"Your focus timer is done.",tag:"one-thing-timer",renotify:true});
+    }
+  }catch(e){}
 }
 function tick(){
   if(timerLeft()<=0){finishTimer();return;}
@@ -398,7 +408,7 @@ function toggleTimer(){
   }
   // start / resume
   let left=timerLeft();if(left<=0)left=S.timer.total;
-  ensureAudio();
+  ensureAudio();askNotify();
   S.timer.running=true;S.timer.endAt=Date.now()+left*1000;S.timer.left=left;
   chimedFor=0;
   save();
@@ -411,6 +421,7 @@ function resetTimer(){
   save();paintTimer();
 }
 function ensureAudio(){try{if(!timer.ac)timer.ac=new(window.AudioContext||window.webkitAudioContext)();if(timer.ac.state==="suspended")timer.ac.resume();}catch(e){}}
+function askNotify(){try{if(typeof Notification!=="undefined"&&Notification.permission==="default")Notification.requestPermission();}catch(e){}}
 function chime(){
   try{const ac=timer.ac;if(!ac)return;
     [0,.18,.36].forEach((d,i)=>{const o=ac.createOscillator(),g=ac.createGain();
@@ -668,15 +679,40 @@ $("#syncPush").onclick=()=>push();
 $("#syncDisconnect").onclick=disconnect;
 
 /* ---------- BACKUP (export / import) ---------- */
+function tstamp(){const d=new Date(),pad=n=>String(n).padStart(2,"0");return d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+"-"+pad(d.getHours())+pad(d.getMinutes());}
+function download(text,name,type){
+  try{
+    const blob=new Blob([text],{type:type||"text/plain"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();
+    setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},1500);
+  }catch(e){}
+}
 function exportBackup(){
   const data={tasks:S.tasks,parked:S.parked,focus:S.focus,preset:S.preset,timer:S.timer||null,savedAt:S.savedAt||Date.now(),exportedAt:new Date().toISOString(),app:"one-thing"};
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
-  const url=URL.createObjectURL(blob);
-  const d=new Date(),pad=n=>String(n).padStart(2,"0");
-  const name="one-thing-backup-"+d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+"-"+pad(d.getHours())+pad(d.getMinutes())+".json";
-  const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();
-  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},1500);
+  download(JSON.stringify(data,null,2),"one-thing-backup-"+tstamp()+".json","application/json");
   setStatus("Exported "+S.tasks.length+" task(s), "+S.parked.length+" parked.","ok");
+}
+function exportText(){
+  const lines=[];
+  lines.push("ONE THING — "+new Date().toLocaleString());
+  lines.push("");
+  lines.push("TASKS ("+S.tasks.length+")");
+  lines.push("=====================");
+  if(!S.tasks.length)lines.push("(none)");
+  S.tasks.forEach(t=>{
+    const tDone=t.done||(t.steps.length>0&&t.steps.every(s=>s.done));
+    lines.push((tDone?"[x] ":"[ ] ")+t.title);
+    t.steps.forEach(s=>lines.push("    "+(s.done?"[x] ":"[ ] ")+s.text));
+  });
+  lines.push("");
+  lines.push("PARKED ("+S.parked.length+")");
+  lines.push("=====================");
+  if(!S.parked.length)lines.push("(none)");
+  S.parked.forEach(p=>lines.push("- "+p.text));
+  lines.push("");
+  download(lines.join("\n"),"one-thing-"+tstamp()+".txt","text/plain");
+  setStatus&&setStatus("Exported as text.","ok");
 }
 function importBackup(file){
   const r=new FileReader();
@@ -695,6 +731,7 @@ function importBackup(file){
   r.readAsText(file);
 }
 $("#exportBtn").onclick=exportBackup;
+$("#exportTxtBtn").onclick=exportText;
 $("#importBtn").onclick=()=>$("#importFile").click();
 $("#importFile").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(f)importBackup(f);e.target.value="";});
 
