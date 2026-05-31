@@ -245,13 +245,10 @@
   <div class="overlay" id="syncOverlay">
     <div class="sheet">
       <h2>Cloud sync</h2>
-      <p>Sync across devices through a private GitHub Gist. Use a <b>classic</b> token with <b>gist</b> scope (fine-grained tokens don't work with gists): <a href="https://github.com/settings/tokens/new?scopes=gist&description=One%20Thing%20sync" target="_blank" rel="noopener">create one here</a>. <b>On every device, paste the same token and tap Connect</b> — the app finds your gist automatically, no ID to copy.</p>
+      <p>Paste the <b>same</b> GitHub token on every device — that's all. Use a <b>classic</b> token with <b>gist</b> scope (fine-grained tokens won't work): <a href="https://github.com/settings/tokens/new?scopes=gist&description=One%20Thing%20sync" target="_blank" rel="noopener">create one here</a>.</p>
 
       <label>GitHub token (classic)</label>
       <input class="field" id="tokenInput" type="password" placeholder="ghp_…" autocomplete="off" autocapitalize="off" spellcheck="false">
-
-      <label>Gist ID <span style="text-transform:none;letter-spacing:0">(optional — leave blank, it's auto-found)</span></label>
-      <input class="field" id="gistInput" placeholder="auto-detected from your token" autocomplete="off" autocapitalize="off" spellcheck="false">
 
       <div class="status" id="syncStatus"></div>
 
@@ -262,13 +259,10 @@
       <div class="sheet-btns" id="syncedBtns" style="display:none">
         <button class="btn" id="syncPush">Push now</button>
         <button class="btn" id="syncNow">Pull latest</button>
-      </div>
-      <div class="sheet-btns" id="syncedBtns2" style="display:none">
-        <button class="btn" id="syncCopy">Copy Gist ID</button>
         <button class="btn danger" id="syncDisconnect">Disconnect</button>
       </div>
 
-      <div class="note">Your token is stored only in this browser and sent only to GitHub. Edits push automatically; the app pulls the cloud copy when you open or return to it. Latest save wins. <b>To add a second device:</b> copy the Gist ID here, then on the other device paste the same token + this ID and tap Connect.</div>
+      <div class="note">Your token is stored only in this browser and sent only to GitHub. Edits push automatically; the app pulls when you open or return to it. The app finds (or creates) your gist from the token, so there's no ID to copy. <span id="buildTag" style="color:var(--ink-faint)">Sync build 8</span></div>
     </div>
   </div>
 </div>
@@ -523,7 +517,7 @@ function schedulePush(){if(!cloud)return;clearTimeout(pushTimer);setDot("busy");
 
 async function connect(){
   const token=$("#tokenInput").value.trim();
-  let gistId=$("#gistInput").value.trim().replace(/^https?:\/\/.*\//,"");
+  let gistId="";
   if(!token){setStatus("Enter your GitHub token.","err");return;}
   setStatus("Checking token…");setDot("busy");
   const fineGrained=/^github_pat_/.test(token);
@@ -551,7 +545,7 @@ async function connect(){
       cloud={token,gistId};
       const ok=await pull(true);
       if(!ok){cloud=null;return;}
-      setStatus(($("#syncStatus").textContent||"Connected.")+" (Found your existing gist — no ID needed on other devices.)","ok");
+      setStatus(($("#syncStatus").textContent||"Connected.")+" Using existing gist "+gistId.slice(0,8)+"…","ok");
     }else{
       const res=await ghReq("POST","/gists",token,{description:"One Thing — focus app data",public:false,files:{[FILE]:{content:payload()}}});
       if(!res.ok){setDot("");setStatus("Couldn't create gist: HTTP "+res.status+(res.status===403?" — token can't create gists (use a CLASSIC token with gist scope)":". "+await ghErr(res)),"err");return;}
@@ -560,7 +554,6 @@ async function connect(){
       setDot("ok");setStatus("Created your gist. On any other device, just paste the SAME token and tap Connect — it'll find this automatically.","ok");stamp();
     }
     saveCloud();reflectSync();
-    $("#gistInput").value=cloud.gistId;
   }catch(e){cloud=null;setDot("");setStatus("Failed: "+netHint(e),"err");}
 }
 function disconnect(){cloud=null;saveCloud();clearTimeout(pushTimer);pushTimer=null;setDot("");setStatus("Disconnected. Data stays on this device.");reflectSync();}
@@ -568,8 +561,7 @@ function reflectSync(){
   const on=!!cloud;
   $("#syncConnect").style.display=on?"none":"";
   $("#syncedBtns").style.display=on?"flex":"none";
-  $("#syncedBtns2").style.display=on?"flex":"none";
-  if(on){$("#tokenInput").value=cloud.token;$("#gistInput").value=cloud.gistId;}
+  if(on){$("#tokenInput").value=cloud.token;}
 }
 $("#gearBtn").onclick=()=>{reflectSync();if(cloud&&!$("#syncStatus").textContent)setStatus("Connected. Last sync "+(lastSync?new Date(lastSync).toLocaleTimeString():"—")+".","ok");$("#syncOverlay").classList.add("open");};
 $("#syncCancel").onclick=()=>$("#syncOverlay").classList.remove("open");
@@ -577,7 +569,6 @@ $("#syncOverlay").onclick=e=>{if(e.target.id==="syncOverlay")$("#syncOverlay").c
 $("#syncConnect").onclick=connect;
 $("#syncNow").onclick=()=>pull(true);
 $("#syncPush").onclick=()=>push();
-$("#syncCopy").onclick=()=>{if(!cloud)return;const t=cloud.gistId;const done=()=>setStatus("Gist ID copied: "+t,"ok");if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(done,()=>{$("#gistInput").focus();$("#gistInput").select();done();});}else{$("#gistInput").focus();$("#gistInput").select();try{document.execCommand("copy");}catch(e){}done();}};
 $("#syncDisconnect").onclick=disconnect;
 
 document.addEventListener("visibilitychange",()=>{
