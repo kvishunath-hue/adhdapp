@@ -257,8 +257,11 @@
         <button class="btn go" id="syncConnect">Connect</button>
       </div>
       <div class="sheet-btns" id="syncedBtns" style="display:none">
-        <button class="btn" id="syncCopy">Copy Gist ID</button>
+        <button class="btn" id="syncPush">Push now</button>
         <button class="btn" id="syncNow">Pull latest</button>
+      </div>
+      <div class="sheet-btns" id="syncedBtns2" style="display:none">
+        <button class="btn" id="syncCopy">Copy Gist ID</button>
         <button class="btn danger" id="syncDisconnect">Disconnect</button>
       </div>
 
@@ -276,10 +279,10 @@ const uid=()=>Math.random().toString(36).slice(2,9);
 let S=load();
 function load(){
   try{const r=JSON.parse(localStorage.getItem(KEY));if(r&&r.tasks)return r;}catch(e){}
-  return {tasks:[],parked:[],focus:null,preset:15};
+  return {tasks:[],parked:[],focus:null,preset:15,savedAt:0};
 }
 function persistLocal(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
-function save(){persistLocal();schedulePush();}
+function save(){S.savedAt=Date.now();persistLocal();schedulePush();}
 
 /* ---------- NOW ---------- */
 function focusedStep(){
@@ -460,7 +463,7 @@ async function gh(method,path,body,token){
   if(!r.ok){const t=await r.text().catch(()=>"");throw new Error(r.status+" "+(r.status===401?"bad token":r.status===404?"gist not found":t.slice(0,80)));}
   return r.json();
 }
-function payload(){return JSON.stringify({tasks:S.tasks,parked:S.parked,focus:S.focus,preset:S.preset});}
+function payload(){return JSON.stringify({tasks:S.tasks,parked:S.parked,focus:S.focus,preset:S.preset,savedAt:S.savedAt||0});}
 
 async function pull(){
   if(!cloud)return;
@@ -472,21 +475,29 @@ async function pull(){
       let content=f.content;
       if(f.truncated&&f.raw_url){const rr=await fetch(f.raw_url+"?t="+Date.now(),{cache:"no-store",headers:{"Authorization":"Bearer "+cloud.token}});content=await rr.text();}
       const data=JSON.parse(content);
-      if(data&&data.tasks){S.tasks=data.tasks;S.parked=data.parked||[];S.focus=data.focus||null;S.preset=data.preset||S.preset;persistLocal();renderAll();}
+      if(data&&data.tasks){
+        const cloudAt=data.savedAt||0, localAt=S.savedAt||0;
+        if(cloudAt>=localAt){
+          S.tasks=data.tasks;S.parked=data.parked||[];S.focus=data.focus||null;S.preset=data.preset||S.preset;S.savedAt=cloudAt;
+          persistLocal();renderAll();
+        }
+      }
     }
     setDot("ok");setStatus("Up to date.","ok");
   }catch(e){setDot("");setStatus("Pull failed: "+e.message,"err");}
   pulling=false;
 }
 async function push(){
-  if(!cloud||pulling)return;
+  if(!cloud)return;
+  clearTimeout(pushTimer);pushTimer=null;
+  if(!S.savedAt)S.savedAt=Date.now();
   setDot("busy");
   try{
     await gh("PATCH","/gists/"+cloud.gistId,{files:{[FILE]:{content:payload()}}});
     setDot("ok");setStatus("Synced.","ok");
   }catch(e){setDot("");setStatus("Sync failed: "+e.message,"err");}
 }
-function schedulePush(){if(!cloud)return;clearTimeout(pushTimer);setDot("busy");pushTimer=setTimeout(push,2000);}
+function schedulePush(){if(!cloud)return;clearTimeout(pushTimer);setDot("busy");pushTimer=setTimeout(push,1500);}
 
 async function connect(){
   const token=$("#tokenInput").value.trim();
@@ -512,6 +523,7 @@ function reflectSync(){
   $("#syncConnect").style.display=on?"none":"";
   $("#syncCancel").textContent=on?"Close":"Close";
   $("#syncedBtns").style.display=on?"flex":"none";
+  $("#syncedBtns2").style.display=on?"flex":"none";
   if(on){$("#tokenInput").value=cloud.token;$("#gistInput").value=cloud.gistId;}
 }
 $("#gearBtn").onclick=()=>{reflectSync();if(cloud&&!$("#syncStatus").textContent)setStatus("Connected.","ok");$("#syncOverlay").classList.add("open");};
@@ -519,11 +531,19 @@ $("#syncCancel").onclick=()=>$("#syncOverlay").classList.remove("open");
 $("#syncOverlay").onclick=e=>{if(e.target.id==="syncOverlay")$("#syncOverlay").classList.remove("open");};
 $("#syncConnect").onclick=connect;
 $("#syncNow").onclick=()=>pull();
+$("#syncPush").onclick=()=>push();
 $("#syncCopy").onclick=()=>{if(!cloud)return;const t=cloud.gistId;const done=()=>setStatus("Gist ID copied: "+t,"ok");if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(done,()=>{$("#gistInput").select();done();});}else{$("#gistInput").focus();$("#gistInput").select();done();}};
 $("#syncDisconnect").onclick=disconnect;
 
-document.addEventListener("visibilitychange",()=>{if(!document.hidden&&cloud&&!pulling)pull();});
-window.addEventListener("focus",()=>{if(cloud&&!pulling)pull();});
+document.addEventListener("visibilitychange",()=>{
+  if(!cloud)return;
+  if(document.hidden){ if(pushTimer)push(); }     // flush pending edits before backgrounding
+  else if(!pulling){ pull(); }                    // pick up other devices' changes on return
+});
+window.addEventListener("pagehide",()=>{if(cloud&&pushTimer)push();});
+
+// periodic bidirectional sync: push pending, then pull
+setInterval(async()=>{ if(!cloud||pulling)return; if(pushTimer)await push(); await pull(); }, 90000);
 
 buildPresets();paintTimer();renderAll();
 if(cloud){setDot("ok");pull();}
