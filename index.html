@@ -465,7 +465,7 @@ async function gh(method,path,body,token){
 }
 function payload(){return JSON.stringify({tasks:S.tasks,parked:S.parked,focus:S.focus,preset:S.preset,savedAt:S.savedAt||0});}
 
-async function pull(){
+async function pull(force){
   if(!cloud)return;
   pulling=true;setDot("busy");
   try{
@@ -477,9 +477,10 @@ async function pull(){
       const data=JSON.parse(content);
       if(data&&data.tasks){
         const cloudAt=data.savedAt||0, localAt=S.savedAt||0;
-        if(cloudAt>=localAt){
-          S.tasks=data.tasks;S.parked=data.parked||[];S.focus=data.focus||null;S.preset=data.preset||S.preset;S.savedAt=cloudAt;
+        if(force||cloudAt>=localAt){
+          S.tasks=data.tasks;S.parked=data.parked||[];S.focus=data.focus||null;S.preset=data.preset||S.preset;S.savedAt=Math.max(cloudAt,localAt);
           persistLocal();renderAll();
+          setStatus("Pulled "+S.tasks.length+" task(s), "+S.parked.length+" parked.","ok");pulling=false;setDot("ok");return;
         }
       }
     }
@@ -507,7 +508,7 @@ async function connect(){
   try{
     if(gistId){
       cloud={token,gistId};
-      await pull();
+      await pull(true);
     }else{
       const g=await gh("POST","/gists",{description:"One Thing — focus app data",public:false,files:{[FILE]:{content:payload()}}},token);
       cloud={token,gistId:g.id};
@@ -530,7 +531,7 @@ $("#gearBtn").onclick=()=>{reflectSync();if(cloud&&!$("#syncStatus").textContent
 $("#syncCancel").onclick=()=>$("#syncOverlay").classList.remove("open");
 $("#syncOverlay").onclick=e=>{if(e.target.id==="syncOverlay")$("#syncOverlay").classList.remove("open");};
 $("#syncConnect").onclick=connect;
-$("#syncNow").onclick=()=>pull();
+$("#syncNow").onclick=()=>pull(true);
 $("#syncPush").onclick=()=>push();
 $("#syncCopy").onclick=()=>{if(!cloud)return;const t=cloud.gistId;const done=()=>setStatus("Gist ID copied: "+t,"ok");if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(done,()=>{$("#gistInput").select();done();});}else{$("#gistInput").focus();$("#gistInput").select();done();}};
 $("#syncDisconnect").onclick=disconnect;
@@ -546,7 +547,7 @@ window.addEventListener("pagehide",()=>{if(cloud&&pushTimer)push();});
 setInterval(async()=>{ if(!cloud||pulling)return; if(pushTimer)await push(); await pull(); }, 90000);
 
 buildPresets();paintTimer();renderAll();
-if(cloud){setDot("ok");pull();}
+if(cloud){setDot("ok");pull(true);}
 </script>
 </body>
 </html>
