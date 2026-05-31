@@ -115,6 +115,7 @@
   .focus-btn{background:none;border:1px solid var(--line);color:var(--ink-dim);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:5px 10px;border-radius:999px;cursor:pointer;font-weight:600;font-family:var(--body)}
   .focus-btn.cur{border-color:var(--accent);color:var(--accent)}
   .focus-btn.inline{padding:3px 9px;margin-left:2px}
+  .meta-focus{display:flex;align-items:center;justify-content:space-between;gap:10px}
   .task-box{margin-top:2px}
   .task-title{cursor:text}
   .step-text{cursor:text}
@@ -129,7 +130,7 @@
 
   /* PARKED view */
   .parked-item{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:14px 14px;margin-bottom:11px;display:flex;align-items:flex-start;gap:10px}
-  .parked-item .body{flex:1;min-width:0}
+  .parked-item .body{flex:1;min-width:0;display:flex;flex-direction:column}
   .parked-item .txt{font-size:16px;color:var(--ink);overflow-wrap:anywhere;word-break:break-word}
   .parked-item .ts{font-size:11px;color:var(--ink-faint);margin-top:4px;letter-spacing:.04em}
   .parked-item .btns{display:flex;flex-direction:column;gap:6px;flex-shrink:0}
@@ -269,7 +270,7 @@
         <button class="btn danger" id="syncDisconnect">Disconnect</button>
       </div>
 
-      <div class="note">Your token is stored only in this browser and sent only to GitHub. Edits push automatically; the app pulls when you open or return to it. The app finds (or creates) your gist from the token, so there's no ID to copy. <span id="buildTag" style="color:var(--ink-faint)">Sync build 9</span></div>
+      <div class="note">Your token is stored only in this browser and sent only to GitHub. Edits push automatically; the app pulls when you open or return to it. The app finds (or creates) your gist from the token, so there's no ID to copy. <span id="buildTag" style="color:var(--ink-faint)">Sync build 10</span></div>
 
       <label>Backup</label>
       <p style="margin-bottom:10px">Save a copy of all tasks &amp; parked items to a file, or restore from one. Useful before big changes or to carry data manually.</p>
@@ -329,35 +330,85 @@ function advance(task){
   S.focus = next ? {taskId:task.id,stepId:next.id} : null;
 }
 
-/* ---------- TIMER ---------- */
-let timer={total:S.preset*60,left:S.preset*60,running:false,iv:null,ac:null};
+/* ---------- TIMER (cross-device via absolute end time) ---------- */
+// Synced state lives in S.timer: {total, running, endAt, left}
+//   running -> remaining derived from endAt (works on any device)
+//   paused/ready -> remaining held in left
+let timer={ac:null,iv:null};
 const C=2*Math.PI*78;
 $("#prog").style.strokeDasharray=C;
+function ensureTimerState(){
+  if(!S.timer||typeof S.timer.total!=="number"){
+    S.timer={total:(S.preset||15)*60,running:false,endAt:0,left:(S.preset||15)*60};
+  }
+}
+function timerLeft(){
+  ensureTimerState();
+  if(S.timer.running)return Math.max(0,Math.round((S.timer.endAt-Date.now())/1000));
+  return Math.max(0,S.timer.left|0);
+}
 function paintTimer(){
-  const m=Math.floor(timer.left/60),s=timer.left%60;
+  ensureTimerState();
+  const left=timerLeft(),total=S.timer.total||1;
+  const m=Math.floor(left/60),s=left%60;
   $("#clock").textContent=`${m}:${String(s).padStart(2,"0")}`;
-  const frac=timer.total?timer.left/timer.total:0;
-  $("#prog").style.strokeDashoffset=C*(1-frac);
-  $("#clockState").textContent=timer.left<=0?"time's up":(timer.running?"focusing":"ready");
-  $("#ring").classList.toggle("done",timer.left<=0);
-  $("#playIcon").innerHTML=timer.running?'<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>':'<path d="M8 5v14l11-7z"/>';
+  $("#prog").style.strokeDashoffset=C*(1-(left/total));
+  const ended=left<=0;
+  $("#clockState").textContent=ended?"time's up":(S.timer.running?"focusing":"ready");
+  $("#ring").classList.toggle("done",ended);
+  $("#playIcon").innerHTML=(S.timer.running&&!ended)?'<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>':'<path d="M8 5v14l11-7z"/>';
+}
+// reconcile the ticking interval with the synced running state (idempotent; called after pulls/renders)
+let chimedFor=0;
+function syncTimerRuntime(){
+  ensureTimerState();
+  if(S.timer.running){
+    if(timerLeft()<=0){ // finished (possibly while on another device)
+      finishTimer();return;
+    }
+    if(!timer.iv)timer.iv=setInterval(tick,1000);
+  }else if(timer.iv){clearInterval(timer.iv);timer.iv=null;}
+  paintTimer();
+}
+function finishTimer(){
+  if(timer.iv){clearInterval(timer.iv);timer.iv=null;}
+  const wasRunning=S.timer.running;
+  S.timer.running=false;S.timer.left=0;
+  if(wasRunning && chimedFor!==S.timer.endAt){chimedFor=S.timer.endAt;chime();}
+  persistLocal();paintTimer();
+}
+function tick(){
+  if(timerLeft()<=0){finishTimer();return;}
+  paintTimer();
 }
 function setPreset(min){
-  S.preset=min;save();
-  timer.total=min*60;timer.left=min*60;timer.running=false;clearInterval(timer.iv);
+  S.preset=min;ensureTimerState();
+  if(timer.iv){clearInterval(timer.iv);timer.iv=null;}
+  S.timer={total:min*60,running:false,endAt:0,left:min*60};
+  save();
   $$(".preset").forEach(p=>p.classList.toggle("sel",+p.dataset.m===min));
   paintTimer();
 }
-function tick(){
-  timer.left--;
-  if(timer.left<=0){timer.left=0;timer.running=false;clearInterval(timer.iv);chime();}
-  paintTimer();
-}
 function toggleTimer(){
-  if(timer.running){timer.running=false;clearInterval(timer.iv);paintTimer();return;}
-  if(timer.left<=0)timer.left=timer.total;
+  ensureTimerState();
+  if(S.timer.running){ // pause
+    S.timer.left=timerLeft();S.timer.running=false;S.timer.endAt=0;
+    if(timer.iv){clearInterval(timer.iv);timer.iv=null;}
+    save();paintTimer();return;
+  }
+  // start / resume
+  let left=timerLeft();if(left<=0)left=S.timer.total;
   ensureAudio();
-  timer.running=true;timer.iv=setInterval(tick,1000);paintTimer();
+  S.timer.running=true;S.timer.endAt=Date.now()+left*1000;S.timer.left=left;
+  chimedFor=0;
+  save();
+  timer.iv=setInterval(tick,1000);paintTimer();
+}
+function resetTimer(){
+  if(timer.iv){clearInterval(timer.iv);timer.iv=null;}
+  ensureTimerState();
+  S.timer.running=false;S.timer.endAt=0;S.timer.left=S.timer.total;
+  save();paintTimer();
 }
 function ensureAudio(){try{if(!timer.ac)timer.ac=new(window.AudioContext||window.webkitAudioContext)();if(timer.ac.state==="suspended")timer.ac.resume();}catch(e){}}
 function chime(){
@@ -374,7 +425,7 @@ function buildPresets(){
   $$(".preset").forEach(p=>p.onclick=()=>setPreset(+p.dataset.m));
 }
 $("#playBtn").onclick=toggleTimer;
-$("#resetBtn").onclick=()=>{timer.left=timer.total;timer.running=false;clearInterval(timer.iv);paintTimer();};
+$("#resetBtn").onclick=resetTimer;
 
 /* ---------- TASKS ---------- */
 function renderTasks(){
@@ -392,7 +443,7 @@ function renderTasks(){
         <button class="chev" data-toggle="${t.id}">${t._open?'▾':'▸'}</button>
         <button class="del" data-deltask="${t.id}">×</button>
       </div>
-      <div class="meta">${total?`${done}/${total} steps`:`no steps yet · <button class="focus-btn inline ${curTask?'cur':''}" data-focustask="${t.id}">${curTask?'in focus':'focus this'}</button>`}</div>
+      <div class="meta ${total?'':'meta-focus'}">${total?`${done}/${total} steps`:`<span>no steps yet</span><button class="focus-btn ${curTask?'cur':''}" data-focustask="${t.id}">${curTask?'in focus':'focus'}</button>`}</div>
       <div class="steps ${open}" data-steps="${t.id}">
         ${t.steps.map(s=>{
           const cur=S.focus&&S.focus.stepId===s.id;
@@ -483,7 +534,7 @@ function setView(v){
   $$("nav button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));
 }
 $$("nav button").forEach(b=>b.onclick=()=>setView(b.dataset.v));
-function renderAll(){renderNow();renderTasks();renderParked();}
+function renderAll(){renderNow();renderTasks();renderParked();syncTimerRuntime();}
 
 /* ---------- GIST SYNC ---------- */
 const SYNC_KEY="onething.sync";
@@ -514,7 +565,7 @@ function netHint(e){
     return "Network blocked. If you're viewing this inside the Claude preview pane, GitHub calls are blocked here — open the hosted page (GitHub Pages / your repo URL) and try there.";
   return m;
 }
-function payload(){return JSON.stringify({tasks:S.tasks,parked:S.parked,focus:S.focus,preset:S.preset,savedAt:S.savedAt||0});}
+function payload(){return JSON.stringify({tasks:S.tasks,parked:S.parked,focus:S.focus,preset:S.preset,timer:S.timer||null,savedAt:S.savedAt||0});}
 function stamp(){lastSync=Date.now();}
 
 // returns true on success
@@ -533,7 +584,7 @@ async function pull(force){
     if(data&&Array.isArray(data.tasks)){
       const cloudAt=data.savedAt||0, localAt=S.savedAt||0;
       if(force||cloudAt>=localAt){
-        S.tasks=data.tasks;S.parked=data.parked||[];S.focus=data.focus||null;S.preset=data.preset||S.preset;S.savedAt=Math.max(cloudAt,localAt);
+        S.tasks=data.tasks;S.parked=data.parked||[];S.focus=data.focus||null;S.preset=data.preset||S.preset;if(data.timer)S.timer=data.timer;S.savedAt=Math.max(cloudAt,localAt);
         persistLocal();renderAll();
         setStatus("Pulled: "+S.tasks.length+" task(s), "+S.parked.length+" parked.","ok");
       }else{
@@ -618,7 +669,7 @@ $("#syncDisconnect").onclick=disconnect;
 
 /* ---------- BACKUP (export / import) ---------- */
 function exportBackup(){
-  const data={tasks:S.tasks,parked:S.parked,focus:S.focus,preset:S.preset,savedAt:S.savedAt||Date.now(),exportedAt:new Date().toISOString(),app:"one-thing"};
+  const data={tasks:S.tasks,parked:S.parked,focus:S.focus,preset:S.preset,timer:S.timer||null,savedAt:S.savedAt||Date.now(),exportedAt:new Date().toISOString(),app:"one-thing"};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob);
   const d=new Date(),pad=n=>String(n).padStart(2,"0");
@@ -657,7 +708,7 @@ window.addEventListener("pagehide",()=>{if(cloud&&pushTimer)push();});
 // periodic bidirectional sync: push pending, then pull
 setInterval(async()=>{ if(!cloud||pulling)return; if(pushTimer)await push(); await pull(false); }, 60000);
 
-buildPresets();paintTimer();renderAll();
+ensureTimerState();buildPresets();syncTimerRuntime();renderAll();
 if(cloud){setDot("ok");pull(true);}
 </script>
 </body>
