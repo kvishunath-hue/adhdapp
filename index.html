@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>One Thing</title>
@@ -242,13 +245,13 @@
   <div class="overlay" id="syncOverlay">
     <div class="sheet">
       <h2>Cloud sync</h2>
-      <p>Sync your tasks across devices through a private GitHub Gist. You need a <b>classic</b> token with <b>gist</b> scope — fine-grained tokens don't work with gists. Create one at <a href="https://github.com/settings/tokens/new?scopes=gist&description=One%20Thing%20sync" target="_blank" rel="noopener">github.com/settings/tokens/new</a> (the gist box is pre-ticked).</p>
+      <p>Sync across devices through a private GitHub Gist. Use a <b>classic</b> token with <b>gist</b> scope (fine-grained tokens don't work with gists): <a href="https://github.com/settings/tokens/new?scopes=gist&description=One%20Thing%20sync" target="_blank" rel="noopener">create one here</a>. <b>On every device, paste the same token and tap Connect</b> — the app finds your gist automatically, no ID to copy.</p>
 
       <label>GitHub token (classic)</label>
       <input class="field" id="tokenInput" type="password" placeholder="ghp_…" autocomplete="off" autocapitalize="off" spellcheck="false">
 
-      <label>Gist ID <span style="text-transform:none;letter-spacing:0">(leave blank to create a new one)</span></label>
-      <input class="field" id="gistInput" placeholder="paste an existing Gist ID, or leave empty" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <label>Gist ID <span style="text-transform:none;letter-spacing:0">(optional — leave blank, it's auto-found)</span></label>
+      <input class="field" id="gistInput" placeholder="auto-detected from your token" autocomplete="off" autocapitalize="off" spellcheck="false">
 
       <div class="status" id="syncStatus"></div>
 
@@ -525,8 +528,8 @@ async function connect(){
   setStatus("Checking token…");setDot("busy");
   const fineGrained=/^github_pat_/.test(token);
   try{
-    // validate token + inspect scopes
-    const chk=await ghReq("GET","/gists?per_page=1",token);
+    // validate token + inspect scopes (also gives us the gist list to auto-discover)
+    const chk=await ghReq("GET","/gists?per_page=100",token);
     const scopes=chk.headers.get("x-oauth-scopes");
     if(chk.status===401){setDot("");setStatus("Token rejected (401). It's mistyped, expired, or revoked.","err");return;}
     if(!chk.ok){setDot("");setStatus("GitHub error "+chk.status+". "+await ghErr(chk),"err");return;}
@@ -534,19 +537,27 @@ async function connect(){
       setDot("");setStatus("Token has no 'gist' scope (has: "+scopes+"). Create a CLASSIC token with gist checked.","err");return;
     }
     if(fineGrained && (scopes===null||scopes==="")){
-      // fine-grained tokens don't expose classic scopes and generally can't write gists
       setStatus("Warning: looks like a fine-grained token — gists usually need a CLASSIC token. Trying anyway…","err");
+    }
+    // If no ID supplied, auto-discover the app's existing gist by filename (so the token alone is enough on every device)
+    if(!gistId){
+      try{
+        const list=await chk.json();
+        const found=Array.isArray(list)&&list.find(g=>g.files&&g.files[FILE]);
+        if(found)gistId=found.id;
+      }catch(e){}
     }
     if(gistId){
       cloud={token,gistId};
       const ok=await pull(true);
       if(!ok){cloud=null;return;}
+      setStatus(($("#syncStatus").textContent||"Connected.")+" (Found your existing gist — no ID needed on other devices.)","ok");
     }else{
       const res=await ghReq("POST","/gists",token,{description:"One Thing — focus app data",public:false,files:{[FILE]:{content:payload()}}});
       if(!res.ok){setDot("");setStatus("Couldn't create gist: HTTP "+res.status+(res.status===403?" — token can't create gists (use a CLASSIC token with gist scope)":". "+await ghErr(res)),"err");return;}
       const g=await res.json();
       cloud={token,gistId:g.id};
-      setDot("ok");setStatus("Created new private gist. ID: "+g.id+" — copy it to your other devices.","ok");stamp();
+      setDot("ok");setStatus("Created your gist. On any other device, just paste the SAME token and tap Connect — it'll find this automatically.","ok");stamp();
     }
     saveCloud();reflectSync();
     $("#gistInput").value=cloud.gistId;
