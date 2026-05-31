@@ -163,6 +163,7 @@
   .sheet .field{width:100%}
   .sheet-btns{display:flex;gap:10px;margin-top:20px}
   .btn{flex:1;padding:13px;border-radius:12px;font-size:14px;font-weight:600;font-family:var(--body);cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+  .btn:disabled{opacity:.55;cursor:default}
   .btn.go{background:var(--accent);border-color:var(--accent);color:var(--bg)}
   .btn.danger{color:var(--warn);border-color:var(--accent-dim)}
   .status{font-size:13px;color:var(--ink-dim);margin-top:14px;min-height:18px}
@@ -271,7 +272,13 @@
         <button class="btn danger" id="syncDisconnect">Disconnect</button>
       </div>
 
-      <div class="note">Your token is stored only in this browser and sent only to GitHub. Edits push automatically; the app pulls when you open or return to it. The app finds (or creates) your gist from the token, so there's no ID to copy. <span id="buildTag" style="color:var(--ink-faint)">Sync build 11</span></div>
+      <div class="note">Your token is stored only in this browser and sent only to GitHub. Edits push automatically; the app pulls when you open or return to it. The app finds (or creates) your gist from the token, so there's no ID to copy. <span id="buildTag" style="color:var(--ink-faint)">Sync build 12</span></div>
+
+      <label>Notifications</label>
+      <p style="margin-bottom:10px" id="notifyDesc">Get a system alert when the focus timer ends.</p>
+      <div class="sheet-btns">
+        <button class="btn" id="notifyBtn">Enable notifications</button>
+      </div>
 
       <label>Backup</label>
       <p style="margin-bottom:10px">Save everything to a file, or restore from one. <b>Export text</b> = a readable .txt list. <b>Export file</b> = a .json backup you can re-import.</p>
@@ -670,7 +677,7 @@ function reflectSync(){
   $("#syncedBtns").style.display=on?"flex":"none";
   if(on){$("#tokenInput").value=cloud.token;}
 }
-$("#gearBtn").onclick=()=>{reflectSync();if(cloud&&!$("#syncStatus").textContent)setStatus("Connected. Last sync "+(lastSync?new Date(lastSync).toLocaleTimeString():"—")+".","ok");$("#syncOverlay").classList.add("open");};
+$("#gearBtn").onclick=()=>{reflectSync();reflectNotify();if(cloud&&!$("#syncStatus").textContent)setStatus("Connected. Last sync "+(lastSync?new Date(lastSync).toLocaleTimeString():"—")+".","ok");$("#syncOverlay").classList.add("open");};
 $("#syncCancel").onclick=()=>$("#syncOverlay").classList.remove("open");
 $("#syncOverlay").onclick=e=>{if(e.target.id==="syncOverlay")$("#syncOverlay").classList.remove("open");};
 $("#syncConnect").onclick=connect;
@@ -733,6 +740,29 @@ function importBackup(file){
 $("#exportBtn").onclick=exportBackup;
 $("#exportTxtBtn").onclick=exportText;
 $("#importBtn").onclick=()=>$("#importFile").click();
+
+function reflectNotify(){
+  const btn=$("#notifyBtn"),desc=$("#notifyDesc");
+  if(!btn)return;
+  if(typeof Notification==="undefined"){
+    btn.textContent="Not supported here";btn.disabled=true;
+    desc.textContent="This browser/tab can't show notifications. On iPhone, add the app to your Home Screen first.";
+    return;
+  }
+  const p=Notification.permission;
+  if(p==="granted"){btn.textContent="Notifications on ✓";btn.disabled=true;desc.textContent="You'll get a system alert when the focus timer ends.";}
+  else if(p==="denied"){btn.textContent="Blocked — enable in browser";btn.disabled=true;desc.textContent="Notifications are blocked. Turn them on for this site in your browser's site settings, then reopen.";}
+  else{btn.textContent="Enable notifications";btn.disabled=false;desc.textContent="Get a system alert when the focus timer ends.";}
+}
+$("#notifyBtn").onclick=()=>{
+  try{
+    if(typeof Notification==="undefined")return;
+    Notification.requestPermission().then(p=>{
+      reflectNotify();
+      if(p==="granted"){try{new Notification("Notifications on",{body:"You'll be alerted when a timer ends.",tag:"one-thing-test"});}catch(e){}}
+    });
+  }catch(e){reflectNotify();}
+};
 $("#importFile").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(f)importBackup(f);e.target.value="";});
 
 document.addEventListener("visibilitychange",()=>{
